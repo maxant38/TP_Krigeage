@@ -1,0 +1,262 @@
+---
+title: "TP3 Krigeage - Challenge 2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Ce TP fera l’objet d’un compte-rendu par groupe de 4 personnes,
+sous forme de Rmd + version pdf ou html. Ce compte-rendu servira à l’évaluation. Il est à remettre sur Campus (au lien de rendu TP) avant le 16 décembre 2022 à 23h59.
+A titre indicatif, le temps à consacrer à ce TP hors cours est de deux à quatre heures par personne.
+
+# Question 1. Vos noms
+
+Insérer ci-après le nom de chaque personne du groupe. Remplacer les noms ci-après, Nom en majuscule (=first family name), Prénom en minuscule.
+
+```{r}
+#1. CAILLE Maxence
+#2. CALLET Maxime
+#3. GRAND-RAVEL Arthur
+```
+
+L'ordre n'a pas d'importance, mais la personne en position 1 sera celle qui remettra le TP sur Campus.
+
+ATTENTION! seul les noms inscrits dans le documents seront utilisés, *aucun ajout a posteriori ne sera accepté*. Vérifiez bien la présence de tous les membres avant la remise.
+
+# Question 2. Votre prédiction
+
+Vous trouverez dans le répertoire de Campus un fichier intitulé "defi_observations.csv", il comporte des observations pour 6 variables X1, ..., X6, et une variable à prédire Y.
+
+Vous trouverez également dans le répertoire du cours un fichier intitulé "defi_apredire.csv" comportant des valeurs pour les 6 variables X1, ..., X6, et où il faudra prédire Y.
+
+* Remettre vos prédictions dans un fichier csv comportant les 6 variables X1, ..., X6, et la colonne Y prédite. Votre fichier s'intitulera "DefiGroupeXXX" où vous remplacerez le suffixe XXX par le nom de la personne indiquée en position 1 à la question 1, celle qui remettra le TP sur Campus.
+Pour l'exemple ci-dessus le nom du fichier serait "DefiGroupeDURAND.csv".
+
+* Le programme à l'origine de vos prédictions sera initulé "programmeDefiGroupeXXX" (en remplaçant XXX...). Il est attendu un programme sour format Rmd+ sortie Html ou pdf correspondante (bouton Knit, ou bien Python+Jupyter Notebook avec sortie html ou pdf).
+
+La contrainte: la prédiction doit se faire au moyen du Krigeage (eh oui, c'est un TP de Krigeage), mais vous pouvez utiliser des éléments de régression aussi (cf. Krigeage universel).
+
+ATTENTION! il vous faudra faire attention à bien utiliser une graine pour votre générateur aéatoire, si vous en utilisez un, p.ex `set.seed(12345)` de façon à ce que vos résultats soit reproductibles. D'une exécution à l'autre, votre programme doit proposer LA MEME prédiction!
+
+Vérifiez bien que votre fichier "DefiGroupeXXX.csv" comporte bien le bon nombre de lignes, et des abscisses dans le bon ordre!
+
+Veillez à remettre impérativement:
+
+* Le fichier CSV DefiGroupeXXX.csv
+* Un notebook Rmd (ou jupyter) et la sortie html ou pdf correspondante (bouton knit) faisant tourner votre programme
+
+Voici un exemple pour l'import et l'export:
+
+```{r}
+# ce qui est donné:
+
+# lecture: Observations contient les X et les Y correspondants
+Observations = read.csv("defi_observations.csv", header = TRUE)
+
+# lecture: Apredire ne contient que des X, il faut prédire les Y
+Apredire = read.csv("defi_apredire.csv", header = TRUE)
+
+```
+
+On crée un dataset train/test pour éviter l'overfitting de notre modèle.
+
+```{r}
+#Split du dataset
+set.seed(12345)
+
+## 75% de dataset train et 25% de dataset test
+taille_dataset_train <- floor(0.75 * nrow(Observations))
+
+train_dataset_index <- sample(seq_len(nrow(Observations)), size = taille_dataset_train)
+
+train <- Observations[train_dataset_index, ]
+test <- Observations[-train_dataset_index, ]
+
+x_train <- train[,1:6]
+x_test <- train[7]
+y_train <- test[,1:6]
+y_test <-  test[7]
+```
+
+Pour évaluer nos modèles on utilise la RMSE.
+```{r}
+rmse <- function(prediction){
+   
+  score_rmse  = sqrt(sum ((y_test - prediction)^2 )/ nrow(test))
+}
+
+```
+
+
+
+
+```{r}
+
+#premièr test  avec le process de Gauss
+
+library(DiceKriging)
+
+model_Gauss <- km(formula = ~1, design = x_train, response = x_test, covtype = "gauss", coef.trend = NULL, estim.method = "MLE")
+prediction_model_Gauss <- predict(object = model_Gauss, newdata = y_train , type="UK" , checkNames=FALSE, se.compute=TRUE)
+prediction_model_Gauss <- prediction_model_Gauss$mean
+
+
+```
+On calcule le score de notre modèle
+
+```{r}
+print(rmse(prediction_model_Gauss))
+```
+On peut améliorer notre modèle en optimisant ses paramètres (théta et sigma2) avec la méthode de LOO.
+On avait les paramètres suivants:
+```{r}
+#On avait comme paramètre précédemment : 
+print(coef(model_Gauss, "range"))
+print( coef(model_Gauss, "sd2"))
+
+
+```
+
+On optimise notre modèle : 
+
+```{r}
+model_Gauss_LOO <- km(formula = ~1, design = x_train , response =x_test , covtype = "gauss", coef.trend = NULL, estim.method = "LOO")
+
+prediction_model_Gauss_LOO <- predict(object = model_Gauss_LOO, newdata = y_train , type="UK" , checkNames=FALSE, se.compute=TRUE)
+
+prediction_model_Gauss_LOO <- prediction_model_Gauss_LOO$mean
+
+```
+
+Les paramètres obtenus sont les suivants:
+```{r}
+model_Gauss_LOO_theta = coef(model_Gauss_LOO, "range")
+model_Gauss_LOO_sigma = coef(model_Gauss_LOO, "sd2")
+
+print(model_Gauss_LOO_theta)
+print(model_Gauss_LOO_sigma)
+```
+On Obtient le score suivant:
+
+```{r}
+
+print(rmse(prediction_model_Gauss_LOO))
+
+```
+
+On pourrait tester d'optimiser nos paramètres avec le processus MLE et en testant différent kernels.
+
+Pour cela on va automatiser nos tests en créant un dataframe qui contiendra: le model / ses paramètres(kenerl et méthode d'optimisation utilisée) / son rmse
+
+```{r}
+#création des différents paramètres 
+covtypes <- c("exp", "matern3_2", "gauss","matern5_2","powexp")
+optimisations <-c("LOO","MLE")
+
+#création du dataframe vide
+df <- data.frame("model_name" = c(""),"covtype" = c(""),"estimation_method" = c(""),"score" = c(""))
+
+```
+
+
+```{r}
+
+#On réalise une boucle entre les kernel et les méthodes d'optimisations
+for (i in 1:length(covtypes)) {
+  #choix du kernel
+  covtype_pick <- covtypes[i]
+  for (j in 1:length(optimisations)) { 
+    
+    #choix de la méthode d'optimisation
+    optimisation <- optimisations[j]
+    
+    #création du modèle
+    model <- km(formula = ~1, design = x_train , response =x_test , covtype = covtype_pick , coef.trend = NULL, estim.method = optimisation )
+    
+    #réalisation des predictions
+    prediction <- predict(object = model, newdata = y_train , type="UK" , checkNames=FALSE, se.compute=TRUE)
+    
+    #calcule de sa rmse
+    score <- rmse(prediction$mean)
+    nom_model_i = as.integer(i)
+    nom_model_j = as.integer(j)
+    
+    #ajout des informations dans le dataframe
+    df[nrow(df) + 1,] <- c(paste("model",nom_model_i,nom_model_j,sep=""),covtype_pick,optimisation,score)
+    
+    }
+}
+
+```
+
+Pour regarder nos résultats
+```{r}
+View(df)
+
+```
+
+On constate que le modèle avec le meilleur score est :
+	
+gauss - MLE qui a une rmse de 0.00952663158100904
+
+
+On l'entraine sur l'ensemble du dataset et on réalise les prédictions que l'on exporte
+
+```{r}
+
+
+
+
+#dataset pour entrainer le modèle final
+x_train_final <- Observations[1:6]
+x_test_final <- Observations[7]
+
+#création du modèle final
+model_final <- km(formula = ~1, design = x_train_final , response =x_test_final , covtype = "gauss", coef.trend = NULL, estim.method = "MLE")
+
+#prédiction avec le modèle final
+prediction_model_final <- predict(object = model_final, newdata = Apredire , type="UK" , checkNames=FALSE, se.compute=TRUE)
+
+  
+```
+
+
+```{r}
+# On concatène d'abord les X avec le Y prédit à l'aide de cbind
+MonFichierSoumis =  cbind(Apredire, prediction_model_final$mean)
+
+# puis on exporte
+MonNomDeFichier = "DefiGroupeCAILLE.csv"
+write.csv(MonFichierSoumis, MonNomDeFichier, row.names = FALSE)
+
+
+```
+
+```{r}
+#on vérifie que c'est bien lisible
+LectureDeMonFichier = read.csv(MonNomDeFichier, header = TRUE)
+
+#on fait des vérifications élémentaires, bon nombre de lignes, de colonnes, etc.
+#on ne doit voir apparaître que des TRUE, sinon ce n'est pas bon!
+message(nrow(LectureDeMonFichier) == 100, ": bon nombre de lignes")
+message(ncol(LectureDeMonFichier) == 7, ": bon nombre de colonnes")
+message(LectureDeMonFichier[37,3]==Apredire[37,3], ": X3 semble ok pour la ligne 37")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
